@@ -75,7 +75,15 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text.lower() == 'skip':
         context.user_data["phone"] = "Not provided"
     else:
-        context.user_data["phone"] = update.message.text
+        # Check if the input contains only numbers, +, and -
+        phone = update.message.text.strip()
+        if not all(char.isdigit() or char in '+-' for char in phone):
+            await update.message.reply_text(
+                "⚠️ Please enter a valid phone number containing only numbers and +/- symbols.\n"
+                "Or type 'Skip' to continue without providing a phone number."
+            )
+            return PHONE
+        context.user_data["phone"] = phone
     
     await update.message.reply_text(
         "4. Please enter your Location / Country:\n"
