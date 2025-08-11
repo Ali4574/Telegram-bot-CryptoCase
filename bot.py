@@ -1,12 +1,20 @@
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 import re
+import os
+from dotenv import load_dotenv
 
 # Define states - expanded to match PDF questions
 (NAME, EMAIL, PHONE, LOCATION, INCIDENT_TYPE, INCIDENT_DESCRIPTION, 
  EXCHANGE, CRYPTO_TYPE, NETWORK, NETWORK_OTHER, WALLET_ADDRESSES, DATE_TIME, 
  AMOUNT_LOST, HOW_OCCURRED, HOW_OCCURRED_OTHER, PROOF_OWNERSHIP, TRANSACTION_IDS, 
  EVIDENCE, POLICE_REPORT, OTHER_SERVICES, ADDITIONAL_INFO) = range(21)
+
+# Load environment variables from .env
+load_dotenv()
+
+# Global configuration from environment
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
 def is_valid_email(email):
     """Check if email is valid using regex pattern"""
@@ -329,8 +337,6 @@ async def get_additional_info(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Store additional info and send complete case to admin."""
     context.user_data["additional_info"] = update.message.text
 
-    # Send comprehensive data to admin (replace with your Telegram user ID)
-    admin_id = 1227132183
     user_data = context.user_data
     
     message = (
@@ -356,7 +362,7 @@ async def get_additional_info(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     
     # Send first part
-    await context.bot.send_message(chat_id=admin_id, text=message)
+    await context.bot.send_message(chat_id=ADMIN_ID, text=message)
     
     # Send second part with evidence info
     evidence_message = (
@@ -372,7 +378,7 @@ async def get_additional_info(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"⚠️ MINIMUM CLAIM: USD $1,000+"
     )
     
-    await context.bot.send_message(chat_id=admin_id, text=evidence_message)
+    await context.bot.send_message(chat_id=ADMIN_ID, text=evidence_message)
 
     keyboard = [['Start New Case']]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
@@ -414,8 +420,15 @@ async def timeout(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Run the bot."""
-    # Replace with your bot token
-    app = ApplicationBuilder().token("7551799880:AAFYztXvznFoUDGof1mlmtU_4Nc5nMqVSoc").build()
+    # Read bot token from environment
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        raise RuntimeError("BOT_TOKEN is not set. Please add it to your .env file.")
+
+    if ADMIN_ID == 0:
+        print("Warning: ADMIN_ID is not set. Set ADMIN_ID in .env to receive submissions.")
+
+    app = ApplicationBuilder().token(bot_token).build()
 
     # Add conversation handler with all new states
     conv_handler = ConversationHandler(
