@@ -430,9 +430,8 @@ async def get_additional_info(update: Update, context: ContextTypes.DEFAULT_TYPE
         "We aim to respond within 24–48 hours.\n\n"
         "💼 Important: Minimum claim size is USD $1,000 and above.\n\n"
         "No Upfront Fees – Pay Only Upon Recovery \n"
-        "🛡️*Your Crypto Isn’t Gone – Let Experts Trace, Investigate, and Recover It.*",
-        "You can start a new case by pressing 'Start New Case' or using /start command.\n\n"
-        
+        "🛡️*Your Crypto Isn't Gone – Let Experts Trace, Investigate, and Recover It.*\n\n"
+        "You can start a new case by pressing 'Start New Case' or using /start command.",
         reply_markup=reply_markup
     )
     return ConversationHandler.END
