@@ -4,11 +4,14 @@ import re
 import os
 from dotenv import load_dotenv
 
-# Define states - expanded to match PDF questions
-(NAME, EMAIL, PHONE, LOCATION, INCIDENT_TYPE, INCIDENT_DESCRIPTION, 
- EXCHANGE, CRYPTO_TYPE, CRYPTO_TYPE_OTHER, NETWORK, NETWORK_OTHER, WALLET_ADDRESSES, DATE_TIME, 
- AMOUNT_LOST, HOW_OCCURRED, HOW_OCCURRED_OTHER, PROOF_OWNERSHIP, TRANSACTION_IDS, 
- EVIDENCE, POLICE_REPORT, OTHER_SERVICES, ADDITIONAL_INFO) = range(22)
+# Define states - expanded to match PDF questions, added POLICE_CASE
+(
+    NAME, EMAIL, PHONE, LOCATION, INCIDENT_TYPE, INCIDENT_DESCRIPTION,
+    EXCHANGE, CRYPTO_TYPE, CRYPTO_TYPE_OTHER, NETWORK, NETWORK_OTHER,
+    WALLET_ADDRESSES, DATE_TIME, AMOUNT_LOST, HOW_OCCURRED, HOW_OCCURRED_OTHER,
+    PROOF_OWNERSHIP, TRANSACTION_IDS, EVIDENCE, POLICE_REPORT, POLICE_CASE,
+    OTHER_SERVICES, ADDITIONAL_INFO
+) = range(23)
 
 # Load environment variables from .env
 load_dotenv()
@@ -27,7 +30,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
     await update.message.reply_text(
-        "🛡 Welcome to Crypto Recovery Desk! 🚀\n\n"
+        "🛡 Welcome to ChainGuard Solutions Crypto Recovery Desk! 🚀\n\n"
         "We specialize in tracing, investigating, and recovering stolen or lost cryptocurrencies.\n\n"
         "Before we can assist you, we need to gather detailed information about your case.\n"
         "All information is kept strictly confidential and used only for investigation purposes.\n\n"
@@ -172,7 +175,7 @@ async def get_crypto_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # If user selects one of the buttons
     context.user_data["crypto_type"] = text
     
-    # Ask for network
+    # Ask for network (keyboard stays here)
     keyboard = [
         ['Ethereum', 'TRON'],
         ['Binance Smart Chain', 'Bitcoin'],
@@ -216,10 +219,12 @@ async def get_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.user_data["network"] = update.message.text
     
+    # remove keyboard here because next question requires free text (wallet addresses)
     await update.message.reply_text(
         "10. Wallet Address(es) involved:\n"
         "Please provide your wallet address and the suspected scammer/hacker's address if known.\n"
-        "Separate multiple addresses with new lines."
+        "Separate multiple addresses with new lines.",
+        reply_markup=ReplyKeyboardRemove()
     )
     return WALLET_ADDRESSES
 
@@ -227,10 +232,12 @@ async def get_network_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Store custom network and ask for wallet addresses."""
     context.user_data["network"] = update.message.text
     
+    # remove keyboard as above
     await update.message.reply_text(
         "10. Wallet Address(es) involved:\n"
         "Please provide your wallet address and the suspected scammer/hacker's address if known.\n"
-        "Separate multiple addresses with new lines."
+        "Separate multiple addresses with new lines.",
+        reply_markup=ReplyKeyboardRemove()
     )
     return WALLET_ADDRESSES
 
@@ -238,9 +245,11 @@ async def get_wallet_addresses(update: Update, context: ContextTypes.DEFAULT_TYP
     """Store wallet addresses and ask for date/time."""
     context.user_data["wallet_addresses"] = update.message.text
     
+    # ensure keyboard removed — free-text question
     await update.message.reply_text(
         "11. Date & Time of Incident:\n"
-        "Please provide the approximate date and time when the incident occurred."
+        "Please provide the approximate date and time when the incident occurred.",
+        reply_markup=ReplyKeyboardRemove()
     )
     return DATE_TIME
 
@@ -248,9 +257,11 @@ async def get_date_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Store date/time and ask for amount lost."""
     context.user_data["date_time"] = update.message.text
     
+    # ensure keyboard removed — free-text question
     await update.message.reply_text(
         "12. Total Amount Lost:\n"
-        "Please specify both in crypto amount and approximate USD value."
+        "Please specify both in crypto amount and approximate USD value.",
+        reply_markup=ReplyKeyboardRemove()
     )
     return AMOUNT_LOST
 
@@ -349,12 +360,33 @@ async def get_evidence(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return POLICE_REPORT
 
 async def get_police_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Store police report info and ask about other services."""
-    context.user_data["police_report"] = update.message.text
-    
+    """Handle the Yes/No for police report. If Yes -> ask for case number, if No -> continue."""
+    text = update.message.text.strip().lower()
+    if text == 'yes':
+        # Ask user to enter case/reference number
+        await update.message.reply_text(
+            "Please enter the case reference number (as provided by the police/cybercrime authority):",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return POLICE_CASE
+    else:
+        # treat anything other than 'yes' as 'no' (still store raw text if you want)
+        context.user_data["police_report"] = "No"
+        # proceed to Q18
+        keyboard = [['Yes', 'No']]
+        reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+        await update.message.reply_text(
+            "18. Have you tried any other recovery services?",
+            reply_markup=reply_markup
+        )
+        return OTHER_SERVICES
+
+async def get_police_case(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Store police case number and continue to question 18."""
+    context.user_data["police_report"] = update.message.text.strip()
+    # proceed to Q18
     keyboard = [['Yes', 'No']]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
-    
     await update.message.reply_text(
         "18. Have you tried any other recovery services?",
         reply_markup=reply_markup
@@ -381,23 +413,23 @@ async def get_additional_info(update: Update, context: ContextTypes.DEFAULT_TYPE
     message = (
         f"🚨 NEW CRYPTO RECOVERY CASE SUBMISSION 🚨\n\n"
         f"📋 SECTION A - BASIC CONTACT INFORMATION:\n"
-        f"👤 Name: {user_data['name']}\n"
-        f"📧 Email: {user_data['email']}\n"
-        f"📱 Phone: {user_data['phone']}\n"
-        f"🌍 Location: {user_data['location']}\n\n"
+        f"👤 Name: {user_data.get('name','')}\n"
+        f"📧 Email: {user_data.get('email','')}\n"
+        f"📱 Phone: {user_data.get('phone','')}\n"
+        f"🌍 Location: {user_data.get('location','')}\n\n"
         
         f"📋 SECTION B - INCIDENT OVERVIEW:\n"
-        f"🔍 Incident Type: {user_data['incident_type']}\n"
-        f"📝 Description: {user_data['incident_description']}\n\n"
+        f"🔍 Incident Type: {user_data.get('incident_type','')}\n"
+        f"📝 Description: {user_data.get('incident_description','')}\n\n"
         
         f"📋 SECTION C - CASE DETAILS:\n"
-        f"🏦 Exchange/Platform: {user_data['exchange']}\n"
-        f"💰 Crypto Type: {user_data['crypto_type']}\n"
-        f"🔗 Network: {user_data['network']}\n"
-        f"🔑 Wallet Addresses: {user_data['wallet_addresses']}\n"
-        f"📅 Date/Time: {user_data['date_time']}\n"
-        f"💸 Amount Lost: {user_data['amount_lost']}\n"
-        f"❓ How Occurred: {user_data['how_occurred']}\n\n"
+        f"🏦 Exchange/Platform: {user_data.get('exchange','')}\n"
+        f"💰 Crypto Type: {user_data.get('crypto_type','')}\n"
+        f"🔗 Network: {user_data.get('network','')}\n"
+        f"🔑 Wallet Addresses: {user_data.get('wallet_addresses','')}\n"
+        f"📅 Date/Time: {user_data.get('date_time','')}\n"
+        f"💸 Amount Lost: {user_data.get('amount_lost','')}\n"
+        f"❓ How Occurred: {user_data.get('how_occurred','')}\n\n"
     )
     
     # Send first part
@@ -406,14 +438,14 @@ async def get_additional_info(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Send second part with evidence info
     evidence_message = (
         f"📋 SECTION D - EVIDENCE & PROOF:\n"
-        f"📄 Proof of Ownership: {user_data['proof_ownership']}\n"
-        f"🔍 Transaction IDs: {user_data['transaction_ids']}\n"
-        f"🗂 Evidence Available: {user_data['evidence']}\n\n"
+        f"📄 Proof of Ownership: {user_data.get('proof_ownership','')}\n"
+        f"🔍 Transaction IDs: {user_data.get('transaction_ids','')}\n"
+        f"🗂 Evidence Available: {user_data.get('evidence','')}\n\n"
         
         f"📋 SECTION E - ADDITIONAL INFO:\n"
-        f"🚔 Police Report: {user_data['police_report']}\n"
-        f"🔄 Other Services: {user_data['other_services']}\n"
-        f"ℹ️ Additional Details: {user_data['additional_info']}\n\n"
+        f"🚔 Police Report / Case No.: {user_data.get('police_report','')}\n"
+        f"🔄 Other Services: {user_data.get('other_services','')}\n"
+        f"ℹ️ Additional Details: {user_data.get('additional_info','')}\n\n"
         f"⚠️ MINIMUM CLAIM: USD $1,000+"
     )
     
@@ -479,36 +511,35 @@ def main():
             MessageHandler(filters.Regex('^Start New Case$'), start)
         ],
         states={
-            NAME: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)
-            ],
-            EMAIL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_email)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            LOCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_location)],
-            INCIDENT_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_incident_type)],
-            INCIDENT_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_incident_description)],
-            EXCHANGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_exchange)],
-            CRYPTO_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_crypto_type)],
-            CRYPTO_TYPE_OTHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_crypto_type_other)],
-            NETWORK: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_network)],
-            NETWORK_OTHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_network_other)],
-            WALLET_ADDRESSES: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_wallet_addresses)],
-            DATE_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_date_time)],
-            AMOUNT_LOST: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_amount_lost)],
-            HOW_OCCURRED: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_how_occurred)],
-            HOW_OCCURRED_OTHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_how_occurred_other)],
-            PROOF_OWNERSHIP: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_proof_ownership)],
-            TRANSACTION_IDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_transaction_ids)],
-            EVIDENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_evidence)],
-            POLICE_REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_police_report)],
-            OTHER_SERVICES: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_other_services)],
-            ADDITIONAL_INFO: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_additional_info)],
+            NAME: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_name) ],
+            EMAIL: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_email) ],
+            PHONE: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone) ],
+            LOCATION: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_location) ],
+            INCIDENT_TYPE: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_incident_type) ],
+            INCIDENT_DESCRIPTION: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_incident_description) ],
+            EXCHANGE: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_exchange) ],
+            CRYPTO_TYPE: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_crypto_type) ],
+            CRYPTO_TYPE_OTHER: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_crypto_type_other) ],
+            NETWORK: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_network) ],
+            NETWORK_OTHER: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_network_other) ],
+            WALLET_ADDRESSES: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_wallet_addresses) ],
+            DATE_TIME: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_date_time) ],
+            AMOUNT_LOST: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_amount_lost) ],
+            HOW_OCCURRED: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_how_occurred) ],
+            HOW_OCCURRED_OTHER: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_how_occurred_other) ],
+            PROOF_OWNERSHIP: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_proof_ownership) ],
+            TRANSACTION_IDS: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_transaction_ids) ],
+            EVIDENCE: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_evidence) ],
+            POLICE_REPORT: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_police_report) ],
+            POLICE_CASE: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_police_case) ],
+            OTHER_SERVICES: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_other_services) ],
+            ADDITIONAL_INFO: [ MessageHandler(filters.TEXT & ~filters.COMMAND, get_additional_info) ],
         },
         fallbacks=[
             CommandHandler("cancel", cancel),
             MessageHandler(filters.Regex('^Start New Case$'), start)
         ],
-        conversation_timeout=600  # Extended timeout to 10 minutes due to more questions
+        conversation_timeout=600  # keep if you have job-queue extras installed; otherwise ignore the warning
     )
 
     app.add_handler(conv_handler)
