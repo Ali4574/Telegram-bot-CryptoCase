@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 
 # Define states - expanded to match PDF questions
 (NAME, EMAIL, PHONE, LOCATION, INCIDENT_TYPE, INCIDENT_DESCRIPTION, 
- EXCHANGE, CRYPTO_TYPE, NETWORK, NETWORK_OTHER, WALLET_ADDRESSES, DATE_TIME, 
+ EXCHANGE, CRYPTO_TYPE, CRYPTO_TYPE_OTHER, NETWORK, NETWORK_OTHER, WALLET_ADDRESSES, DATE_TIME, 
  AMOUNT_LOST, HOW_OCCURRED, HOW_OCCURRED_OTHER, PROOF_OWNERSHIP, TRANSACTION_IDS, 
- EVIDENCE, POLICE_REPORT, OTHER_SERVICES, ADDITIONAL_INFO) = range(21)
+ EVIDENCE, POLICE_REPORT, OTHER_SERVICES, ADDITIONAL_INFO) = range(22)
 
 # Load environment variables from .env
 load_dotenv()
@@ -134,22 +134,61 @@ async def get_incident_description(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text(
         "📋 Section C – Case Details\n\n"
         "7. Exchange or Platform Name (if applicable):\n"
-        "Enter the name or type 'N/A' if not applicable."
+        "Enter the name or type 'skip' if not applicable."
     )
     return EXCHANGE
 
 async def get_exchange(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Store exchange and ask for crypto type."""
-    context.user_data["exchange"] = update.message.text
+    if update.message.text.lower() == 'skip':
+        context.user_data["exchange"] = "Not applicable"
+    else:
+        context.user_data["exchange"] = update.message.text
+    
+    # Provide keyboard for crypto types (top 5 + Other)
+    keyboard = [
+        ['BTC', 'ETH', 'USDT'],
+        ['BNB', 'SOL', 'Other']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
     await update.message.reply_text(
         "8. Type of Cryptocurrency involved:\n"
-        "For example: USDT, BTC, ETH, etc."
+        "Please choose from the options below or select 'Other' to type a different crypto.",
+        reply_markup=reply_markup
     )
     return CRYPTO_TYPE
 
 async def get_crypto_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Store crypto type and ask for network."""
+    """Handle selected crypto type or ask for custom input."""
+    text = update.message.text
+    if text == 'Other':
+        await update.message.reply_text(
+            "Please type the cryptocurrency name/symbol (e.g., XRP, ADA, DOGE):",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return CRYPTO_TYPE_OTHER
+    
+    # If user selects one of the buttons
+    context.user_data["crypto_type"] = text
+    
+    # Ask for network
+    keyboard = [
+        ['Ethereum', 'TRON'],
+        ['Binance Smart Chain', 'Bitcoin'],
+        ['Polygon', 'Avalanche'],
+        ['Other']
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "9. Network / Blockchain:",
+        reply_markup=reply_markup
+    )
+    return NETWORK
+
+async def get_crypto_type_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Store custom crypto type and ask for network."""
     context.user_data["crypto_type"] = update.message.text
     
     keyboard = [
@@ -223,7 +262,7 @@ async def get_amount_lost(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ['Phishing link', 'Fake investment platform'],
         ['Rug pull', 'Fake wallet app'],
         ['Social engineering', 'Unauthorized transfer'],
-        ['Other']
+        ['KYC', 'Other']
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
@@ -383,13 +422,17 @@ async def get_additional_info(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = [['Start New Case']]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     
+    # Append your requested thank-you message lines exactly as provided
     await update.message.reply_text(
         "✅ Thank you for providing the details!\n\n"
         "Our investigation team will review your case and get in touch via email/Telegram.\n\n"
         "📅 Please note: This process is strictly confidential and reviewed manually by our specialists.\n"
         "We aim to respond within 24–48 hours.\n\n"
         "💼 Important: Minimum claim size is USD $1,000 and above.\n\n"
-        "You can start a new case by pressing 'Start New Case' or using /start command.",
+        "No Upfront Fees – Pay Only Upon Recovery \n"
+        "🛡️*Your Crypto Isn’t Gone – Let Experts Trace, Investigate, and Recover It.*",
+        "You can start a new case by pressing 'Start New Case' or using /start command.\n\n"
+        
         reply_markup=reply_markup
     )
     return ConversationHandler.END
@@ -447,6 +490,7 @@ def main():
             INCIDENT_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_incident_description)],
             EXCHANGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_exchange)],
             CRYPTO_TYPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_crypto_type)],
+            CRYPTO_TYPE_OTHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_crypto_type_other)],
             NETWORK: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_network)],
             NETWORK_OTHER: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_network_other)],
             WALLET_ADDRESSES: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_wallet_addresses)],
