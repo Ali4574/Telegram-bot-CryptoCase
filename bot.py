@@ -260,7 +260,7 @@ async def get_date_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ensure keyboard removed — free-text question
     await update.message.reply_text(
         "12. Total Amount Lost:\n"
-        "Please specify both in crypto amount and approximate USD value.",
+        "Please specify approximate USD value.",
         reply_markup=ReplyKeyboardRemove()
     )
     return AMOUNT_LOST
